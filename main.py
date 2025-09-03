@@ -116,7 +116,7 @@ def main():
     
     # Import and run the GUI
     try:
-        from gui import RaymarchGUI
+        from src.gui.gui import RaymarchGUI
         
         # HDR settings
         enable_hdr = not args.no_hdr

@@ -1,64 +1,72 @@
-# Python Raymarching/Raytracing with OpenCL
+# Intel Render Engine
 
-A real-time raymarching renderer using OpenCL for GPU acceleration with a GUI interface.
+A high-performance real-time raymarching/raytracing engine with advanced volumetric cloud rendering and HDR support.
+
+## Quick Start
+
+```bash
+# Interactive launcher with all options
+python launch.py
+
+# Launch cloud scene with HDR
+python launch.py clouds
+
+# Launch demo scene in LDR mode  
+python launch.py demo --no-hdr
+
+# Show all available options
+python launch.py --help
+```
+
+## Project Structure
+
+```
+├── launch.py              # Main entry point
+├── main.py                # Core application
+├── requirements.txt       # Python dependencies
+├── src/                   # Source code
+│   ├── core/              # Core engine components
+│   │   ├── raymarcher.py  # Main raymarching engine
+│   │   └── camera.py      # 3D camera system
+│   ├── gui/               # User interface
+│   │   └── gui.py         # Pygame-based GUI
+│   ├── scenes/            # Scene definitions
+│   │   └── scenes.py      # Available scenes
+│   ├── shaders/           # OpenCL compute shaders
+│   │   ├── raymarch_hdr.cl           # HDR raymarching
+│   │   ├── volumetric_clouds_hdr.cl  # HDR cloud rendering
+│   │   └── advanced_clouds_hdr.cl    # Advanced cloud physics
+│   └── launchers/         # Launch utilities
+│       └── universal_launcher.py     # Universal launcher
+├── docs/                  # Documentation
+├── tools/                 # Development tools
+└── examples/              # Example scenes
+```
 
 ## Features
 
-- Real-time raymarching/raytracing using OpenCL
-- Interactive GUI using Pygame
-- Support for various 3D primitives (spheres, boxes, torus)
-- Real-time parameter adjustment
-- GPU-accelerated rendering
+- **Real-time Raymarching**: GPU-accelerated distance field rendering
+- **Advanced Camera System**: Quaternion-based 3D camera with smooth movement
+- **HDR Rendering**: High Dynamic Range with multiple tone mapping operators
+- **Volumetric Clouds**: Physically-based cloud rendering with atmospheric scattering
+- **Multiple Scenes**: Demo, minimal, complex, and cloud scenes
+- **Interactive Controls**: Mouse and keyboard controls with customizable sensitivity
 
 ## Requirements
 
 - Python 3.8+
-- OpenCL-compatible GPU/CPU
-- Required packages listed in requirements.txt
+- OpenCL compatible GPU
+- See `requirements.txt` for Python dependencies
 
-## Installation
+## Documentation
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+See the `docs/` folder for detailed documentation:
+- User guides and controls
+- Camera system documentation  
+- Cloud rendering guide
+- Blender integration
 
-2. Run the application:
-```bash
-# Default windowed mode (800x600)
-python main.py
+## Development
 
-# Fullscreen with native resolution
-python main.py --fullscreen --auto-resolution
-
-# Specific resolution
-python main.py --resolution 1920x1080
-
-# Custom window size
-python main.py --width 1280 --height 720
-```
-
-## Quick Launch
-```bash
-# Use launcher for quick access
-python launcher.py fullscreen  # Native resolution fullscreen
-python launcher.py hd         # 1920x1080 resolution  
-python launcher.py 4k         # 4K resolution
-```
-
-## Controls
-
-- Arrow keys: Rotate camera
-- WASD: Move camera
-- Mouse: Adjust parameters in real-time
-- F11: Toggle fullscreen
-- F12: Cycle through resolution presets
-- ESC: Exit
-
-## Project Structure
-
-- `main.py` - Main application entry point
-- `raymarcher.py` - OpenCL raymarching engine
-- `gui.py` - GUI interface using Pygame
-- `shaders/` - OpenCL kernel code
-- `scenes/` - Scene definitions
+This project uses a modular structure for easy development and maintenance.
+All core components are in `src/` with clear separation of concerns.

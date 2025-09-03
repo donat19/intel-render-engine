@@ -3,8 +3,8 @@ import numpy as np
 import time
 import os
 from typing import Tuple, Optional
-from scenes.scenes import get_scene
-from camera import Camera
+from ..scenes.scenes import get_scene
+from .camera import Camera
 
 class RayMarcher:
     def __init__(self, width: int = 800, height: int = 600, scene_name: str = 'demo', enable_hdr: bool = True):
@@ -73,25 +73,25 @@ class RayMarcher:
         """Load and compile the appropriate OpenCL kernel based on scene and HDR settings"""
         if self.scene_name == 'clouds':
             if self.enable_hdr:
-                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds_hdr.cl')
+                kernel_path = os.path.join(os.path.dirname(__file__), '..', 'shaders', 'volumetric_clouds_hdr.cl')
                 kernel_name = 'volumetric_clouds_hdr_kernel'
             else:
-                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds.cl')
+                kernel_path = os.path.join(os.path.dirname(__file__), '..', 'shaders', 'volumetric_clouds.cl')
                 kernel_name = 'volumetric_clouds_kernel'
         elif self.scene_name == 'advanced_clouds':
             if self.enable_hdr:
-                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'advanced_clouds_hdr.cl')
+                kernel_path = os.path.join(os.path.dirname(__file__), '..', 'shaders', 'advanced_clouds_hdr.cl')
                 kernel_name = 'advanced_clouds_hdr_kernel'
             else:
                 # Fallback to regular cloud shader for LDR
-                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds.cl')
+                kernel_path = os.path.join(os.path.dirname(__file__), '..', 'shaders', 'volumetric_clouds.cl')
                 kernel_name = 'volumetric_clouds_kernel'
         else:
             if self.enable_hdr:
-                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'raymarch_hdr.cl')
+                kernel_path = os.path.join(os.path.dirname(__file__), '..', 'shaders', 'raymarch_hdr.cl')
                 kernel_name = 'raymarch_hdr_kernel'
             else:
-                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'raymarch.cl')
+                kernel_path = os.path.join(os.path.dirname(__file__), '..', 'shaders', 'raymarch.cl')
                 kernel_name = 'raymarch_kernel'
         
         try:
@@ -278,7 +278,7 @@ class RayMarcher:
     
     def get_available_scenes(self) -> list:
         """Get list of available scene names"""
-        from scenes.scenes import SCENES
+        from ..scenes.scenes import SCENES
         return list(SCENES.keys())
     
     # HDR Control Methods

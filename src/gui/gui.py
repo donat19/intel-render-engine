@@ -2,7 +2,7 @@ import pygame
 import numpy as np
 import sys
 from typing import Optional, Tuple
-from raymarcher import RayMarcher
+from ..core.raymarcher import RayMarcher
 
 class RaymarchGUI:
     def __init__(self, width: int = 800, height: int = 600, title: str = "Raymarching Demo", 
