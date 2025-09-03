@@ -324,24 +324,24 @@ def main():
     launcher = UniversalLauncher()
     
     # Handle positional argument
-    positional_scene = args.scene  # This is the positional argument
-    override_scene = getattr(args, 'scene', None) if hasattr(args, 'scene') else None  # This is the --scene flag
+    mode = args.mode  # This is the positional argument (scene, fullscreen, or resolution)
+    override_scene = args.scene  # This is the --scene flag
     
-    if positional_scene:
-        if positional_scene == 'fullscreen':
+    if mode:
+        if mode == 'fullscreen':
             launcher.add_display_mode('fullscreen')
             # Use override scene if provided, otherwise default to clouds
             scene_to_use = override_scene if override_scene else 'clouds'
             launcher.add_scene(scene_to_use)
-        elif positional_scene in UniversalLauncher.RESOLUTIONS:
+        elif mode in UniversalLauncher.RESOLUTIONS:
             # Resolution preset like '4k', 'hd'
-            launcher.add_display_mode('windowed', positional_scene)
+            launcher.add_display_mode('windowed', mode)
             # Use override scene if provided, otherwise default to demo
             scene_to_use = override_scene if override_scene else 'demo'
             launcher.add_scene(scene_to_use)
         else:
             # Scene name as positional argument
-            launcher.add_scene(positional_scene)
+            launcher.add_scene(mode)
     elif override_scene:
         # Only --scene flag provided, no positional argument
         launcher.add_scene(override_scene)
