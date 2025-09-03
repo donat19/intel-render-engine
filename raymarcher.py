@@ -66,6 +66,14 @@ class RayMarcher:
             else:
                 kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds.cl')
                 kernel_name = 'volumetric_clouds_kernel'
+        elif self.scene_name == 'advanced_clouds':
+            if self.enable_hdr:
+                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'advanced_clouds_hdr.cl')
+                kernel_name = 'advanced_clouds_hdr_kernel'
+            else:
+                # Fallback to regular cloud shader for LDR
+                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds.cl')
+                kernel_name = 'volumetric_clouds_kernel'
         else:
             if self.enable_hdr:
                 kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'raymarch_hdr.cl')

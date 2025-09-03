@@ -31,7 +31,7 @@ from typing import List, Optional
 class UniversalLauncher:
     """Universal launcher for the Intel Render Engine"""
     
-    SCENES = ['demo', 'minimal', 'complex', 'clouds']
+    SCENES = ['demo', 'minimal', 'complex', 'clouds', 'advanced_clouds']
     TONE_MAPPING_MODES = ['linear', 'reinhard', 'filmic', 'aces']
     RESOLUTIONS = {
         'hd': '1280x720',

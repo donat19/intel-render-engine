@@ -78,7 +78,7 @@ def parse_arguments():
     parser.add_argument('--auto-resolution', action='store_true', help='Use native screen resolution')
     parser.add_argument('--resolution', type=str, help='Set specific resolution (e.g., 1920x1080)')
     parser.add_argument('--scene', type=str, default='demo', 
-                      help='Initial scene to load (demo, minimal, complex, clouds)')
+                      help='Initial scene to load (demo, minimal, complex, clouds, advanced_clouds)')
     parser.add_argument('--no-hdr', action='store_true', help='Disable HDR rendering')
     parser.add_argument('--exposure', type=float, default=1.0, help='Initial HDR exposure (default: 1.0)')
     parser.add_argument('--tone-mapping', type=str, default='reinhard', 

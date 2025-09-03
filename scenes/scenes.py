@@ -183,12 +183,48 @@ def create_cloud_scene() -> Scene:
     
     return scene
 
+def create_advanced_cloud_scene() -> Scene:
+    """Create an advanced volumetric cloud scene with realistic atmosphere"""
+    scene = Scene("Advanced Clouds")
+    
+    # No solid objects - pure atmospheric rendering
+    # The landscape will be generated procedurally in the shader
+    
+    # Sky parameters stored as special objects for the shader
+    scene.add_object('atmosphere', (0.0, 0.0, 0.0), {
+        'cloud_base': 5.0,
+        'cloud_top': 15.0,
+        'cloud_scale': 0.02,
+        'wind_speed': 0.8,
+        'wind_direction': (1.0, 0.0, 0.3),
+        'turbulence': 0.3,
+        'coverage': 0.6
+    })
+    
+    # Sun parameters
+    scene.add_object('sun', (0.0, 0.0, 0.0), {
+        'intensity': 15.0,
+        'color': (1.0, 0.8, 0.6),
+        'angular_size': 0.5,
+        'halo_intensity': 3.0
+    })
+    
+    # Sun light (animated to show time of day)
+    scene.add_light((20.0, 25.0, 10.0), (15.0, 12.0, 8.0), 1.0)
+    
+    # Set camera for optimal cloud viewing
+    scene.camera_start_pos = np.array([0.0, 8.0, 25.0], dtype=np.float32)
+    scene.camera_start_angles = np.array([0.0, -0.15, 0.0], dtype=np.float32)
+    
+    return scene
+
 # Available scenes
 SCENES = {
     'demo': create_demo_scene,
     'minimal': create_minimal_scene,
     'complex': create_complex_scene,
-    'clouds': create_cloud_scene
+    'clouds': create_cloud_scene,
+    'advanced_clouds': create_advanced_cloud_scene
 }
 
 def get_scene(name: str = 'demo') -> Scene:
