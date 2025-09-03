@@ -173,7 +173,7 @@ Available tone mapping: linear, reinhard, filmic, aces
     )
     
     # Scene selection
-    parser.add_argument('scene', nargs='?', choices=UniversalLauncher.SCENES + ['fullscreen'] + list(UniversalLauncher.RESOLUTIONS.keys()),
+    parser.add_argument('mode', nargs='?', choices=UniversalLauncher.SCENES + ['fullscreen'] + list(UniversalLauncher.RESOLUTIONS.keys()),
                        help='Scene to launch or display mode')
     
     # Display options
@@ -324,21 +324,27 @@ def main():
     launcher = UniversalLauncher()
     
     # Handle positional argument
-    if args.scene:
-        if args.scene == 'fullscreen':
-            launcher.add_display_mode('fullscreen')
-            launcher.add_scene('clouds')  # Default scene for fullscreen
-        elif args.scene in UniversalLauncher.RESOLUTIONS:
-            # Resolution preset like '4k', 'hd'
-            launcher.add_display_mode('windowed', args.scene)
-            launcher.add_scene('demo')  # Default scene
-        else:
-            # Scene name
-            launcher.add_scene(args.scene)
+    positional_scene = args.scene  # This is the positional argument
+    override_scene = getattr(args, 'scene', None) if hasattr(args, 'scene') else None  # This is the --scene flag
     
-    # Override scene if specified
-    if args.scene and hasattr(args, 'scene') and args.scene in UniversalLauncher.SCENES:
-        launcher.add_scene(args.scene)
+    if positional_scene:
+        if positional_scene == 'fullscreen':
+            launcher.add_display_mode('fullscreen')
+            # Use override scene if provided, otherwise default to clouds
+            scene_to_use = override_scene if override_scene else 'clouds'
+            launcher.add_scene(scene_to_use)
+        elif positional_scene in UniversalLauncher.RESOLUTIONS:
+            # Resolution preset like '4k', 'hd'
+            launcher.add_display_mode('windowed', positional_scene)
+            # Use override scene if provided, otherwise default to demo
+            scene_to_use = override_scene if override_scene else 'demo'
+            launcher.add_scene(scene_to_use)
+        else:
+            # Scene name as positional argument
+            launcher.add_scene(positional_scene)
+    elif override_scene:
+        # Only --scene flag provided, no positional argument
+        launcher.add_scene(override_scene)
     
     # Display mode
     if args.fullscreen:
