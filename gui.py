@@ -48,10 +48,12 @@ class RaymarchGUI:
         
         # Control states
         self.keys_pressed = set()
-        self.mouse_sensitivity = 0.005
-        self.move_speed = 0.1
         self.last_mouse_pos = None
         self.mouse_captured = False
+        
+        # Configure camera
+        self.raymarcher.set_camera_speed(5.0)      # 5 units per second
+        self.raymarcher.set_mouse_sensitivity(0.1) # Mouse sensitivity
         
         # FPS tracking
         self.fps_font = pygame.font.Font(None, 36)
@@ -140,11 +142,8 @@ class RaymarchGUI:
                     dx = event.pos[0] - self.last_mouse_pos[0]
                     dy = event.pos[1] - self.last_mouse_pos[1]
                     
-                    # Apply mouse look (correct horizontal/vertical)
-                    self.raymarcher.rotate_camera(
-                        pitch=dy * self.mouse_sensitivity,
-                        yaw=-dx * self.mouse_sensitivity
-                    )
+                    # Apply mouse look using new camera system
+                    self.raymarcher.handle_mouse_movement(dx, dy)
                 
                 self.last_mouse_pos = event.pos
             
@@ -171,19 +170,24 @@ class RaymarchGUI:
     
     def handle_continuous_input(self):
         """Handle continuous key input"""
+        # Speed multiplier for running
+        speed_multiplier = 1.0
+        if pygame.K_LSHIFT in self.keys_pressed:
+            speed_multiplier = 3.0  # Run speed
+        
         # Camera movement
         if pygame.K_w in self.keys_pressed:
-            self.raymarcher.move_camera('forward', self.move_speed)
+            self.raymarcher.move_camera('forward', speed_multiplier)
         if pygame.K_s in self.keys_pressed:
-            self.raymarcher.move_camera('backward', self.move_speed)
+            self.raymarcher.move_camera('backward', speed_multiplier)
         if pygame.K_a in self.keys_pressed:
-            self.raymarcher.move_camera('left', self.move_speed)
+            self.raymarcher.move_camera('left', speed_multiplier)
         if pygame.K_d in self.keys_pressed:
-            self.raymarcher.move_camera('right', self.move_speed)
+            self.raymarcher.move_camera('right', speed_multiplier)
         if pygame.K_SPACE in self.keys_pressed:
-            self.raymarcher.move_camera('up', self.move_speed)
-        if pygame.K_LSHIFT in self.keys_pressed:
-            self.raymarcher.move_camera('down', self.move_speed)
+            self.raymarcher.move_camera('up', speed_multiplier)
+        if pygame.K_LCTRL in self.keys_pressed:
+            self.raymarcher.move_camera('down', speed_multiplier)
         
         # Arrow key rotation
         rotation_speed = 0.02

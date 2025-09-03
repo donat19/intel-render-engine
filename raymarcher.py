@@ -4,6 +4,7 @@ import time
 import os
 from typing import Tuple, Optional
 from scenes.scenes import get_scene
+from camera import Camera
 
 class RayMarcher:
     def __init__(self, width: int = 800, height: int = 600, scene_name: str = 'demo', enable_hdr: bool = True):
@@ -42,20 +43,31 @@ class RayMarcher:
             self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
                                          width * height * 4)  # RGBA
         
-        # Camera parameters (use scene defaults)
-        self.camera_pos = self.scene.camera_start_pos.copy()
-        self.camera_angles = self.scene.camera_start_angles.copy()
+        # Initialize new camera system
+        self.camera = Camera(
+            position=self.scene.camera_start_pos.copy(),
+            up=np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        )
+        
+        # Set initial camera angles from scene
+        self.camera.reset(
+            position=self.scene.camera_start_pos.copy(),
+            pitch=self.scene.camera_start_angles[0],
+            yaw=self.scene.camera_start_angles[1], 
+            roll=self.scene.camera_start_angles[2]
+        )
         
         # Animation parameters
         self.start_time = time.time()
+        self.last_frame_time = time.time()
         
         # Output array
         self.output_array = np.zeros((height, width, 4), dtype=np.uint8)
         
         print(f"Initialized RayMarcher with scene: {self.scene.name}")
         print(f"HDR enabled: {enable_hdr}")
-        print(f"Camera start position: {self.camera_pos}")
-        print(f"Camera start angles: {self.camera_angles}")
+        print(f"Camera start position: {self.camera.position}")
+        print(f"Camera start angles: [{self.camera.pitch:.3f}, {self.camera.yaw:.3f}, {self.camera.roll:.3f}]")
     
     def _load_kernel(self):
         """Load and compile the appropriate OpenCL kernel based on scene and HDR settings"""
@@ -106,30 +118,18 @@ class RayMarcher:
                 raise
     
     def _create_camera_matrix(self) -> np.ndarray:
-        """Create camera rotation matrix from angles"""
-        pitch, yaw, roll = self.camera_angles
-        
-        # Rotation matrices
-        cos_p, sin_p = np.cos(pitch), np.sin(pitch)
-        cos_y, sin_y = np.cos(yaw), np.sin(yaw)
-        cos_r, sin_r = np.cos(roll), np.sin(roll)
-        
-        # Combined rotation matrix (simplified for OpenCL)
-        matrix = np.array([
-            cos_y * cos_r, -cos_y * sin_r, sin_y, 0,
-            sin_p * sin_y * cos_r + cos_p * sin_r, 
-            -sin_p * sin_y * sin_r + cos_p * cos_r, 
-            -sin_p * cos_y, 0,
-            -cos_p * sin_y * cos_r + sin_p * sin_r,
-            cos_p * sin_y * sin_r + sin_p * cos_r,
-            cos_p * cos_y, 0,
-            0, 0, 0, 1
-        ], dtype=np.float32)
-        
-        return matrix
+        """Create camera matrix from new camera system"""
+        return self.camera.get_camera_matrix_flat()
     
     def render(self) -> np.ndarray:
         """Render a frame and return RGBA array"""
+        # Update camera with delta time
+        current_frame_time = time.time()
+        delta_time = current_frame_time - self.last_frame_time
+        self.last_frame_time = current_frame_time
+        
+        self.camera.update(delta_time)
+        
         current_time = time.time() - self.start_time
         camera_matrix = self._create_camera_matrix()
         
@@ -149,7 +149,7 @@ class RayMarcher:
             np.int32(self.height),
             np.float32(current_time),
             camera_matrix,
-            self.camera_pos
+            self.camera.position
         )
         
         # Execute kernel
@@ -171,7 +171,7 @@ class RayMarcher:
             np.int32(self.height),
             np.float32(current_time),
             camera_matrix,
-            self.camera_pos
+            self.camera.position
         )
         
         # Execute HDR rendering kernel
@@ -208,46 +208,55 @@ class RayMarcher:
         }
         return modes.get(self.tone_mapping_mode, 1)  # Default to Reinhard
     
-    def move_camera(self, direction: str, speed: float = 0.1):
-        """Move camera in specified direction"""
-        if direction == 'forward':
-            self.camera_pos[2] -= speed
-        elif direction == 'backward':
-            self.camera_pos[2] += speed
-        elif direction == 'left':
-            self.camera_pos[0] -= speed
-        elif direction == 'right':
-            self.camera_pos[0] += speed
-        elif direction == 'up':
-            self.camera_pos[1] += speed
-        elif direction == 'down':
-            self.camera_pos[1] -= speed
+    def move_camera(self, direction: str, speed_multiplier: float = 1.0):
+        """Move camera in specified direction using new camera system"""
+        current_time = time.time()
+        delta_time = current_time - self.last_frame_time
+        self.last_frame_time = current_time
+        
+        self.camera.move_smooth(direction, delta_time, speed_multiplier)
     
     def rotate_camera(self, pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0):
-        """Rotate camera by specified angles"""
-        self.camera_angles[0] += pitch
-        self.camera_angles[1] += yaw
-        self.camera_angles[2] += roll
-        
-        # Clamp pitch to avoid gimbal lock
-        self.camera_angles[0] = np.clip(self.camera_angles[0], -np.pi/2, np.pi/2)
+        """Rotate camera by specified angles using new camera system"""
+        self.camera.rotate(pitch, yaw, roll)
+    
+    def handle_mouse_movement(self, x_offset: float, y_offset: float):
+        """Handle mouse movement for camera rotation"""
+        self.camera.handle_mouse_movement(x_offset, y_offset)
     
     def set_camera_position(self, x: float, y: float, z: float):
         """Set absolute camera position"""
-        self.camera_pos = np.array([x, y, z], dtype=np.float32)
+        self.camera.position = np.array([x, y, z], dtype=np.float32)
     
     def set_camera_angles(self, pitch: float, yaw: float, roll: float = 0.0):
         """Set absolute camera angles"""
-        self.camera_angles = np.array([pitch, yaw, roll], dtype=np.float32)
+        self.camera.reset(position=None, pitch=pitch, yaw=yaw, roll=roll)
     
     def get_camera_info(self) -> dict:
         """Get current camera information"""
-        return {
-            'position': self.camera_pos.copy(),
-            'angles': self.camera_angles.copy(),
+        info = self.camera.get_info()
+        info.update({
             'time': time.time() - self.start_time,
             'scene': self.scene.name
-        }
+        })
+        return info
+    
+    def reset_camera(self):
+        """Reset camera to scene defaults"""
+        self.camera.reset(
+            position=self.scene.camera_start_pos.copy(),
+            pitch=self.scene.camera_start_angles[0],
+            yaw=self.scene.camera_start_angles[1],
+            roll=self.scene.camera_start_angles[2]
+        )
+    
+    def set_camera_speed(self, speed: float):
+        """Set camera movement speed"""
+        self.camera.set_movement_speed(speed)
+    
+    def set_mouse_sensitivity(self, sensitivity: float):
+        """Set mouse sensitivity"""
+        self.camera.set_mouse_sensitivity(sensitivity)
     
     def switch_scene(self, scene_name: str):
         """Switch to a different scene"""
@@ -257,20 +266,15 @@ class RayMarcher:
             self.scene = get_scene(scene_name)
             
             # Reset camera to scene defaults
-            self.camera_pos = self.scene.camera_start_pos.copy()
-            self.camera_angles = self.scene.camera_start_angles.copy()
+            self.reset_camera()
             
             # Reload appropriate kernel
             self._load_kernel()
             
             print(f"Switched to scene: {self.scene.name}")
-            print(f"Camera position: {self.camera_pos}")
-    
-    def reset_camera(self):
-        """Reset camera to scene default position"""
-        self.camera_pos = self.scene.camera_start_pos.copy()
-        self.camera_angles = self.scene.camera_start_angles.copy()
-        print(f"Camera reset to: pos={self.camera_pos}, angles={self.camera_angles}")
+            print(f"Camera position: {self.camera.position}")
+        
+        print(f"Switched to scene: {scene_name}")
     
     def get_available_scenes(self) -> list:
         """Get list of available scene names"""
