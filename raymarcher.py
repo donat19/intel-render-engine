@@ -3,26 +3,48 @@ import numpy as np
 import time
 import os
 from typing import Tuple, Optional
+from scenes.scenes import get_scene
 
 class RayMarcher:
-    def __init__(self, width: int = 800, height: int = 600):
+    def __init__(self, width: int = 800, height: int = 600, scene_name: str = 'demo', enable_hdr: bool = True):
         self.width = width
         self.height = height
+        self.scene_name = scene_name
+        self.enable_hdr = enable_hdr
+        
+        # HDR settings
+        self.exposure = 1.0
+        self.tone_mapping_mode = 'reinhard'  # 'linear', 'reinhard', 'filmic', 'aces'
+        self.gamma = 2.2
         
         # Initialize OpenCL
         self.context = cl.create_some_context(interactive=False)
         self.queue = cl.CommandQueue(self.context)
         
-        # Load and compile kernel
+        # Load scene
+        self.scene = get_scene(scene_name)
+        
+        # Load and compile appropriate kernel
         self._load_kernel()
         
-        # Create output buffer
-        self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
-                                     width * height * 4)  # RGBA
+        # Create buffers
+        if enable_hdr:
+            # HDR buffer (float4)
+            self.hdr_buffer = cl.Buffer(self.context, cl.mem_flags.READ_WRITE, 
+                                      width * height * 4 * 4)  # float4 (16 bytes per pixel)
+            # LDR output buffer (uchar4)
+            self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
+                                         width * height * 4)  # RGBA uchar
+            # HDR array for CPU processing
+            self.hdr_array = np.zeros((height, width, 4), dtype=np.float32)
+        else:
+            # Standard LDR buffer
+            self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
+                                         width * height * 4)  # RGBA
         
-        # Camera parameters
-        self.camera_pos = np.array([0.0, 0.0, 5.0], dtype=np.float32)
-        self.camera_angles = np.array([0.0, 0.0, 0.0], dtype=np.float32)  # pitch, yaw, roll
+        # Camera parameters (use scene defaults)
+        self.camera_pos = self.scene.camera_start_pos.copy()
+        self.camera_angles = self.scene.camera_start_angles.copy()
         
         # Animation parameters
         self.start_time = time.time()
@@ -30,20 +52,50 @@ class RayMarcher:
         # Output array
         self.output_array = np.zeros((height, width, 4), dtype=np.uint8)
         
+        print(f"Initialized RayMarcher with scene: {self.scene.name}")
+        print(f"HDR enabled: {enable_hdr}")
+        print(f"Camera start position: {self.camera_pos}")
+        print(f"Camera start angles: {self.camera_angles}")
+    
     def _load_kernel(self):
-        """Load and compile the OpenCL kernel"""
-        kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'raymarch.cl')
+        """Load and compile the appropriate OpenCL kernel based on scene and HDR settings"""
+        if self.scene_name == 'clouds':
+            if self.enable_hdr:
+                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds_hdr.cl')
+                kernel_name = 'volumetric_clouds_hdr_kernel'
+            else:
+                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'volumetric_clouds.cl')
+                kernel_name = 'volumetric_clouds_kernel'
+        else:
+            if self.enable_hdr:
+                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'raymarch_hdr.cl')
+                kernel_name = 'raymarch_hdr_kernel'
+            else:
+                kernel_path = os.path.join(os.path.dirname(__file__), 'shaders', 'raymarch.cl')
+                kernel_name = 'raymarch_kernel'
         
         try:
             with open(kernel_path, 'r') as f:
                 kernel_source = f.read()
             
             self.program = cl.Program(self.context, kernel_source).build()
-            self.kernel = self.program.raymarch_kernel
+            self.kernel = getattr(self.program, kernel_name)
+            
+            # Load tone mapping kernel if HDR is enabled
+            if self.enable_hdr:
+                self.tone_map_kernel = self.program.tone_map_kernel
+            
+            print(f"Loaded kernel: {kernel_name} from {os.path.basename(kernel_path)}")
             
         except Exception as e:
             print(f"Error loading kernel: {e}")
-            raise
+            # Fallback to non-HDR versions
+            if self.enable_hdr:
+                print("Falling back to non-HDR rendering")
+                self.enable_hdr = False
+                self._load_kernel()
+            else:
+                raise
     
     def _create_camera_matrix(self) -> np.ndarray:
         """Create camera rotation matrix from angles"""
@@ -73,6 +125,15 @@ class RayMarcher:
         current_time = time.time() - self.start_time
         camera_matrix = self._create_camera_matrix()
         
+        if self.enable_hdr:
+            # HDR rendering pipeline
+            return self._render_hdr(current_time, camera_matrix)
+        else:
+            # Standard LDR rendering pipeline
+            return self._render_ldr(current_time, camera_matrix)
+    
+    def _render_ldr(self, current_time: float, camera_matrix: np.ndarray) -> np.ndarray:
+        """Standard LDR rendering pipeline"""
         # Set kernel arguments
         self.kernel.set_args(
             self.output_buffer,
@@ -92,6 +153,52 @@ class RayMarcher:
         self.queue.finish()
         
         return self.output_array
+    
+    def _render_hdr(self, current_time: float, camera_matrix: np.ndarray) -> np.ndarray:
+        """HDR rendering pipeline with tone mapping"""
+        # Step 1: Render to HDR buffer
+        self.kernel.set_args(
+            self.hdr_buffer,
+            np.int32(self.width),
+            np.int32(self.height),
+            np.float32(current_time),
+            camera_matrix,
+            self.camera_pos
+        )
+        
+        # Execute HDR rendering kernel
+        global_size = (self.width, self.height)
+        cl.enqueue_nd_range_kernel(self.queue, self.kernel, global_size, None)
+        
+        # Step 2: Apply tone mapping
+        self.tone_map_kernel.set_args(
+            self.hdr_buffer,          # Input HDR buffer
+            self.output_buffer,       # Output LDR buffer
+            np.int32(self.width),
+            np.int32(self.height),
+            np.float32(self.exposure),
+            np.int32(self._get_tone_mapping_mode_id()),
+            np.float32(self.gamma)
+        )
+        
+        # Execute tone mapping kernel
+        cl.enqueue_nd_range_kernel(self.queue, self.tone_map_kernel, global_size, None)
+        
+        # Read result
+        cl.enqueue_copy(self.queue, self.output_array, self.output_buffer)
+        self.queue.finish()
+        
+        return self.output_array
+    
+    def _get_tone_mapping_mode_id(self) -> int:
+        """Convert tone mapping mode string to integer ID"""
+        modes = {
+            'linear': 0,
+            'reinhard': 1,
+            'filmic': 2,
+            'aces': 3
+        }
+        return modes.get(self.tone_mapping_mode, 1)  # Default to Reinhard
     
     def move_camera(self, direction: str, speed: float = 0.1):
         """Move camera in specified direction"""
@@ -130,7 +237,88 @@ class RayMarcher:
         return {
             'position': self.camera_pos.copy(),
             'angles': self.camera_angles.copy(),
-            'time': time.time() - self.start_time
+            'time': time.time() - self.start_time,
+            'scene': self.scene.name
+        }
+    
+    def switch_scene(self, scene_name: str):
+        """Switch to a different scene"""
+        if scene_name != self.scene_name:
+            print(f"Switching from {self.scene_name} to {scene_name}")
+            self.scene_name = scene_name
+            self.scene = get_scene(scene_name)
+            
+            # Reset camera to scene defaults
+            self.camera_pos = self.scene.camera_start_pos.copy()
+            self.camera_angles = self.scene.camera_start_angles.copy()
+            
+            # Reload appropriate kernel
+            self._load_kernel()
+            
+            print(f"Switched to scene: {self.scene.name}")
+            print(f"Camera position: {self.camera_pos}")
+    
+    def reset_camera(self):
+        """Reset camera to scene default position"""
+        self.camera_pos = self.scene.camera_start_pos.copy()
+        self.camera_angles = self.scene.camera_start_angles.copy()
+        print(f"Camera reset to: pos={self.camera_pos}, angles={self.camera_angles}")
+    
+    def get_available_scenes(self) -> list:
+        """Get list of available scene names"""
+        from scenes.scenes import SCENES
+        return list(SCENES.keys())
+    
+    # HDR Control Methods
+    def adjust_exposure(self, delta: float):
+        """Adjust exposure by delta amount"""
+        self.exposure = max(0.1, min(10.0, self.exposure + delta))
+        print(f"Exposure: {self.exposure:.2f}")
+    
+    def set_exposure(self, exposure: float):
+        """Set absolute exposure value"""
+        self.exposure = max(0.1, min(10.0, exposure))
+        print(f"Exposure: {self.exposure:.2f}")
+    
+    def cycle_tone_mapping(self):
+        """Cycle through tone mapping modes"""
+        modes = ['linear', 'reinhard', 'filmic', 'aces']
+        current_index = modes.index(self.tone_mapping_mode)
+        next_index = (current_index + 1) % len(modes)
+        self.tone_mapping_mode = modes[next_index]
+        print(f"Tone mapping: {self.tone_mapping_mode}")
+    
+    def set_tone_mapping(self, mode: str):
+        """Set tone mapping mode"""
+        valid_modes = ['linear', 'reinhard', 'filmic', 'aces']
+        if mode in valid_modes:
+            self.tone_mapping_mode = mode
+            print(f"Tone mapping: {self.tone_mapping_mode}")
+        else:
+            print(f"Invalid tone mapping mode: {mode}. Valid modes: {valid_modes}")
+    
+    def adjust_gamma(self, delta: float):
+        """Adjust gamma by delta amount"""
+        self.gamma = max(1.0, min(3.0, self.gamma + delta))
+        print(f"Gamma: {self.gamma:.2f}")
+    
+    def set_gamma(self, gamma: float):
+        """Set absolute gamma value"""
+        self.gamma = max(1.0, min(3.0, gamma))
+        print(f"Gamma: {self.gamma:.2f}")
+    
+    def toggle_hdr(self):
+        """Toggle HDR rendering on/off"""
+        if hasattr(self, 'enable_hdr'):
+            print("HDR toggle requires reinitialization - use switch_hdr_mode() instead")
+        
+    def get_hdr_info(self) -> dict:
+        """Get current HDR settings"""
+        return {
+            'hdr_enabled': self.enable_hdr,
+            'exposure': self.exposure,
+            'tone_mapping': self.tone_mapping_mode,
+            'gamma': self.gamma
         }
     
     def resize(self, width: int, height: int):
@@ -139,9 +327,21 @@ class RayMarcher:
             self.width = width
             self.height = height
             
-            # Recreate output buffer
-            self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
-                                         width * height * 4)
+            # Recreate buffers
+            if self.enable_hdr:
+                # HDR buffer (float4)
+                self.hdr_buffer = cl.Buffer(self.context, cl.mem_flags.READ_WRITE, 
+                                          width * height * 4 * 4)
+                # LDR output buffer
+                self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
+                                             width * height * 4)
+                # HDR array
+                self.hdr_array = np.zeros((height, width, 4), dtype=np.float32)
+            else:
+                # Standard LDR buffer
+                self.output_buffer = cl.Buffer(self.context, cl.mem_flags.WRITE_ONLY, 
+                                             width * height * 4)
+            
             self.output_array = np.zeros((height, width, 4), dtype=np.uint8)
     
     def cleanup(self):

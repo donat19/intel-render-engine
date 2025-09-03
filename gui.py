@@ -6,7 +6,7 @@ from raymarcher import RayMarcher
 
 class RaymarchGUI:
     def __init__(self, width: int = 800, height: int = 600, title: str = "Raymarching Demo", 
-                 fullscreen: bool = False, auto_resolution: bool = False):
+                 fullscreen: bool = False, auto_resolution: bool = False, scene: str = 'demo', enable_hdr: bool = True):
         # Get display info first
         pygame.init()
         display_info = pygame.display.Info()
@@ -36,9 +36,11 @@ class RaymarchGUI:
         pygame.display.set_caption(title)
         self.clock = pygame.time.Clock()
         
-        # Initialize raymarcher
+        # Initialize raymarcher with HDR support
         try:
-            self.raymarcher = RayMarcher(self.width, self.height)
+            self.raymarcher = RayMarcher(self.width, self.height, scene, enable_hdr)
+            self.available_scenes = self.raymarcher.get_available_scenes()
+            self.current_scene_index = self.available_scenes.index(scene) if scene in self.available_scenes else 0
         except Exception as e:
             print(f"Failed to initialize raymarcher: {e}")
             pygame.quit()
@@ -55,6 +57,7 @@ class RaymarchGUI:
         self.fps_font = pygame.font.Font(None, 36)
         self.show_fps = True
         self.show_camera_info = True
+        self.show_hdr_info = True
         
         # Performance tracking
         self.frame_times = []
@@ -83,6 +86,8 @@ class RaymarchGUI:
                 elif event.key == pygame.K_F2:
                     self.show_camera_info = not self.show_camera_info
                 elif event.key == pygame.K_F3:
+                    self.show_hdr_info = not self.show_hdr_info
+                elif event.key == pygame.K_F4:
                     self.mouse_captured = not self.mouse_captured
                     pygame.mouse.set_visible(not self.mouse_captured)
                 elif event.key == pygame.K_F11:
@@ -99,8 +104,33 @@ class RaymarchGUI:
                         self.running = False
                 elif event.key == pygame.K_r:
                     # Reset camera
-                    self.raymarcher.set_camera_position(0, 0, 5)
-                    self.raymarcher.set_camera_angles(0, 0, 0)
+                    self.raymarcher.reset_camera()
+                elif event.key == pygame.K_TAB:
+                    # Cycle through scenes
+                    self.cycle_scene()
+                elif event.key == pygame.K_c:
+                    # Switch to cloud scene specifically
+                    if 'clouds' in self.available_scenes:
+                        self.switch_scene('clouds')
+                # HDR Controls
+                elif event.key == pygame.K_EQUALS or event.key == pygame.K_PLUS:
+                    # Increase exposure
+                    self.raymarcher.adjust_exposure(0.1)
+                elif event.key == pygame.K_MINUS:
+                    # Decrease exposure
+                    self.raymarcher.adjust_exposure(-0.1)
+                elif event.key == pygame.K_t:
+                    # Cycle tone mapping
+                    self.raymarcher.cycle_tone_mapping()
+                elif event.key == pygame.K_g:
+                    # Reset gamma to default
+                    self.raymarcher.set_gamma(2.2)
+                elif event.key == pygame.K_LEFTBRACKET:
+                    # Decrease gamma
+                    self.raymarcher.adjust_gamma(-0.1)
+                elif event.key == pygame.K_RIGHTBRACKET:
+                    # Increase gamma
+                    self.raymarcher.adjust_gamma(0.1)
             
             elif event.type == pygame.KEYUP:
                 self.keys_pressed.discard(event.key)
@@ -242,6 +272,21 @@ class RaymarchGUI:
         
         print(f"Resolution changed to: {width}x{height}")
     
+    def cycle_scene(self):
+        """Cycle through available scenes"""
+        self.current_scene_index = (self.current_scene_index + 1) % len(self.available_scenes)
+        new_scene = self.available_scenes[self.current_scene_index]
+        self.switch_scene(new_scene)
+    
+    def switch_scene(self, scene_name: str):
+        """Switch to a specific scene"""
+        if scene_name in self.available_scenes:
+            self.raymarcher.switch_scene(scene_name)
+            self.current_scene_index = self.available_scenes.index(scene_name)
+            print(f"Switched to scene: {scene_name}")
+        else:
+            print(f"Scene '{scene_name}' not available")
+    
     def render_frame(self) -> float:
         """Render a single frame and return render time"""
         import time
@@ -290,6 +335,7 @@ class RaymarchGUI:
             camera_info = self.raymarcher.get_camera_info()
             pos = camera_info['position']
             angles = camera_info['angles']
+            scene_name = camera_info.get('scene', 'Unknown')
             
             pos_text = self.fps_font.render(f"Pos: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})", True, (255, 255, 0))
             self.screen.blit(pos_text, (10, y_offset))
@@ -298,6 +344,30 @@ class RaymarchGUI:
             angles_text = self.fps_font.render(f"Angles: ({np.degrees(angles[0]):.1f}°, {np.degrees(angles[1]):.1f}°)", True, (255, 255, 0))
             self.screen.blit(angles_text, (10, y_offset))
             y_offset += 25
+            
+            scene_text = self.fps_font.render(f"Scene: {scene_name}", True, (255, 255, 0))
+            self.screen.blit(scene_text, (10, y_offset))
+            y_offset += 25
+        
+        if self.show_hdr_info and hasattr(self.raymarcher, 'enable_hdr'):
+            hdr_info = self.raymarcher.get_hdr_info()
+            
+            hdr_text = self.fps_font.render(f"HDR: {'ON' if hdr_info['hdr_enabled'] else 'OFF'}", True, (0, 255, 255))
+            self.screen.blit(hdr_text, (10, y_offset))
+            y_offset += 25
+            
+            if hdr_info['hdr_enabled']:
+                exp_text = self.fps_font.render(f"Exposure: {hdr_info['exposure']:.2f}", True, (0, 255, 255))
+                self.screen.blit(exp_text, (10, y_offset))
+                y_offset += 25
+                
+                tone_text = self.fps_font.render(f"Tone Map: {hdr_info['tone_mapping']}", True, (0, 255, 255))
+                self.screen.blit(tone_text, (10, y_offset))
+                y_offset += 25
+                
+                gamma_text = self.fps_font.render(f"Gamma: {hdr_info['gamma']:.2f}", True, (0, 255, 255))
+                self.screen.blit(gamma_text, (10, y_offset))
+                y_offset += 25
             
             # Display mode info
             mode_text = "Fullscreen" if self.is_fullscreen else "Windowed"
@@ -319,10 +389,16 @@ class RaymarchGUI:
                 "Space/Shift - Up/Down",
                 "F1 - Toggle FPS",
                 "F2 - Toggle camera info",
-                "F3 - Toggle mouse capture",
+                "F3 - Toggle HDR info",
+                "F4 - Toggle mouse capture",
                 "F11 - Toggle fullscreen",
                 "F12 - Cycle resolution",
+                "TAB - Cycle scenes",
+                "C - Cloud scene",
                 "R - Reset camera",
+                "+/- - Exposure",
+                "T - Tone mapping",
+                "[ ] - Gamma",
                 "ESC - Exit"
             ]
             
@@ -333,19 +409,36 @@ class RaymarchGUI:
     
     def run(self):
         """Main game loop"""
-        print("Starting Raymarching Demo...")
+        print("Starting Raymarching Demo with HDR...")
         print("Controls:")
         print("  WASD - Move camera")
         print("  Mouse/Arrow keys - Look around")
         print("  F1 - Toggle FPS display")
         print("  F2 - Toggle camera info")
-        print("  F3 - Toggle mouse capture")
+        print("  F3 - Toggle HDR info")
+        print("  F4 - Toggle mouse capture")
         print("  F11 - Toggle fullscreen")
         print("  F12 - Cycle resolution")
+        print("  TAB - Cycle scenes")
+        print("  C - Switch to cloud scene")
         print("  R - Reset camera")
+        print("HDR Controls:")
+        print("  +/- - Adjust exposure")
+        print("  T - Cycle tone mapping")
+        print("  [ ] - Adjust gamma")
         print("  ESC - Exit")
         print(f"Current resolution: {self.width}x{self.height}")
         print(f"Native resolution: {self.screen_width}x{self.screen_height}")
+        print(f"Available scenes: {', '.join(self.available_scenes)}")
+        print(f"Current scene: {self.raymarcher.scene.name}")
+        if hasattr(self.raymarcher, 'enable_hdr'):
+            hdr_info = self.raymarcher.get_hdr_info()
+            print(f"HDR: {'Enabled' if hdr_info['hdr_enabled'] else 'Disabled'}")
+            if hdr_info['hdr_enabled']:
+                print(f"Exposure: {hdr_info['exposure']:.2f}")
+                print(f"Tone mapping: {hdr_info['tone_mapping']}")
+                print(f"Gamma: {hdr_info['gamma']:.2f}")
+        print("")
         
         while self.running:
             try:

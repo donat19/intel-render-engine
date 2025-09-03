@@ -71,12 +71,19 @@ def check_opencl():
 
 def parse_arguments():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='Raymarching/Raytracing Demo with OpenCL')
+    parser = argparse.ArgumentParser(description='Raymarching/Raytracing Demo with OpenCL and HDR')
     parser.add_argument('--width', type=int, default=800, help='Window width (default: 800)')
     parser.add_argument('--height', type=int, default=600, help='Window height (default: 600)')
     parser.add_argument('--fullscreen', action='store_true', help='Start in fullscreen mode')
     parser.add_argument('--auto-resolution', action='store_true', help='Use native screen resolution')
     parser.add_argument('--resolution', type=str, help='Set specific resolution (e.g., 1920x1080)')
+    parser.add_argument('--scene', type=str, default='demo', 
+                      help='Initial scene to load (demo, minimal, complex, clouds)')
+    parser.add_argument('--no-hdr', action='store_true', help='Disable HDR rendering')
+    parser.add_argument('--exposure', type=float, default=1.0, help='Initial HDR exposure (default: 1.0)')
+    parser.add_argument('--tone-mapping', type=str, default='reinhard', 
+                      choices=['linear', 'reinhard', 'filmic', 'aces'],
+                      help='Initial tone mapping mode (default: reinhard)')
     return parser.parse_args()
 
 def main():
@@ -84,8 +91,8 @@ def main():
     # Parse command line arguments
     args = parse_arguments()
     
-    print("Raymarching/Raytracing Demo with OpenCL")
-    print("=" * 40)
+    print("Raymarching/Raytracing Demo with OpenCL and HDR")
+    print("=" * 45)
     
     # Handle resolution argument
     width, height = args.width, args.height
@@ -111,6 +118,13 @@ def main():
     try:
         from gui import RaymarchGUI
         
+        # HDR settings
+        enable_hdr = not args.no_hdr
+        print(f"HDR rendering: {'Enabled' if enable_hdr else 'Disabled'}")
+        if enable_hdr:
+            print(f"Initial exposure: {args.exposure}")
+            print(f"Initial tone mapping: {args.tone_mapping}")
+        
         # Create and run the application
         print("\\nInitializing application...")
         if args.auto_resolution:
@@ -121,10 +135,18 @@ def main():
         gui = RaymarchGUI(
             width=width, 
             height=height, 
-            title="Raymarching Demo - OpenCL",
+            title="Raymarching Demo - OpenCL HDR",
             fullscreen=args.fullscreen,
-            auto_resolution=args.auto_resolution
+            auto_resolution=args.auto_resolution,
+            scene=args.scene,
+            enable_hdr=enable_hdr
         )
+        
+        # Set initial HDR parameters
+        if enable_hdr and hasattr(gui.raymarcher, 'enable_hdr') and gui.raymarcher.enable_hdr:
+            gui.raymarcher.set_exposure(args.exposure)
+            gui.raymarcher.set_tone_mapping(args.tone_mapping)
+        
         gui.run()
         
     except KeyboardInterrupt:
