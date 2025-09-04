@@ -289,7 +289,7 @@ class OpenCLGUI:
         kernel_path = os.path.join(project_root, 'shaders', 'gui.cl')
         
         try:
-            with open(kernel_path, 'r') as f:
+            with open(kernel_path, 'r', encoding='utf-8') as f:
                 kernel_source = f.read()
             
             self.program = cl.Program(self.context, kernel_source).build()

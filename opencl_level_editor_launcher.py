@@ -205,7 +205,9 @@ def launch_opencl_level_editor(debug: bool = False, theme: str = "blender") -> b
         
         # Создаем и запускаем редактор
         editor = OpenCLLevelEditor(width=1400, height=900)
-        editor.gui.set_theme(selected_theme)
+        if editor.gui:
+            editor.gui.set_theme(selected_theme)
+            print(f"🎨 Применена тема: {selected_theme.value}")
         
         print("\n" + "="*60)
         print("🎮 УПРАВЛЕНИЕ:")
