@@ -1,4 +1,10 @@
+# Core rendering dependencies
 pyopencl>=2023.1
 numpy>=1.21.0
 pygame>=2.5.0
 Pillow>=9.0.0
+
+# Level Editor dependencies
+imgui[glfw,opengl,pygame]>=1.4.0
+PyOpenGL>=3.1.0
+PyOpenGL_accelerate>=3.1.0
